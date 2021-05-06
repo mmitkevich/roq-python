@@ -26,7 +26,7 @@ class Client:
     """Client connection"""
 
     def __init__(self, fix_version, sender_comp_id, target_comp_id, heart_bt_int):
-        """ constructor """
+        """constructor"""
         self.reader = self.writer = self.timer = None
         self.fix_version = fix_version
         self.sender_comp_id = sender_comp_id
@@ -52,7 +52,7 @@ class Client:
         target_comp_id,
         heart_bt_int,
     ):
-        """ factory method to create an instance """
+        """factory method to create an instance"""
         self = Client(fix_version, sender_comp_id, target_comp_id, heart_bt_int)
         self.reader, self.writer = await asyncio.open_connection(hostname, port)
         loop = asyncio.get_event_loop()
@@ -60,13 +60,13 @@ class Client:
         return self
 
     async def on_logon(self):
-        """ logon event handler """
+        """logon event handler"""
 
     async def on_logout(self):
-        """ logout event handler """
+        """logout event handler"""
 
     async def dispatch(self):
-        """ read from stream and dispatch messages """
+        """read from stream and dispatch messages"""
         await self.send_logon(heart_bt_int=30)
         self.request_sent = datetime.now()
         parser = simplefix.FixParser()
@@ -98,7 +98,7 @@ class Client:
         await self.writer.wait_closed()
 
     async def send_logon(self, heart_bt_int):
-        """ send a logon message """
+        """send a logon message"""
         await self._send(
             {
                 simplefix.TAG_MSGTYPE: simplefix.MSGTYPE_LOGON,
@@ -107,7 +107,7 @@ class Client:
         )
 
     async def send_logout(self, text):
-        """ send a logout message """
+        """send a logout message"""
         await self._send(
             {
                 simplefix.TAG_MSGTYPE: simplefix.MSGTYPE_LOGOUT,
@@ -116,7 +116,7 @@ class Client:
         )
 
     async def send_test_request(self, test_req_id):
-        """ send a logout message """
+        """send a logout message"""
         now = datetime.now()
         await self._send(
             {
@@ -130,7 +130,7 @@ class Client:
         self.remote_heartbeat_timeout = now + timedelta(seconds=10)
 
     async def send_heartbeat(self, test_req_id):
-        """ send a logout message """
+        """send a logout message"""
         await self._send(
             {
                 simplefix.TAG_MSGTYPE: simplefix.MSGTYPE_HEARTBEAT,
@@ -139,7 +139,7 @@ class Client:
         )
 
     async def _send(self, params):
-        """ helper method to encode a message and write to stream """
+        """helper method to encode a message and write to stream"""
         message = simplefix.FixMessage()
         # standard header
         message.append_pair(simplefix.TAG_BEGINSTRING, f"FIX.{self.fix_version}")
@@ -233,9 +233,7 @@ class Client:
             timeout = (now - self.request_sent) > timedelta(seconds=10)
             if timeout:
                 if self.closing:
-                    print(
-                        "WARN: Logout request has timed out, stream will be closed now"
-                    )
+                    print("WARN: Logout request has timed out, stream will be closed now")
                     self._close()
                 else:
                     raise RuntimeError("Logon request has timed out")
@@ -243,10 +241,7 @@ class Client:
     async def _check_our_heartbeat(self):
         now = datetime.now()
         # remote heartbeat
-        if (
-            self.remote_heartbeat_timeout is not None
-            and now > self.remote_heartbeat_timeout
-        ):
+        if self.remote_heartbeat_timeout is not None and now > self.remote_heartbeat_timeout:
             raise RuntimeError("Heartbeat has not been received")
         # our request for heartbeat
         if self.next_test_request is not None and now > self.next_test_request:
@@ -255,10 +250,7 @@ class Client:
     async def _check_remote_heartbeat(self):
         now = datetime.now()
         # remote request for heartbeat
-        if (
-            self.remote_heart_bt_int is not None
-            and now > self.remote_test_request_timeout
-        ):
+        if self.remote_heart_bt_int is not None and now > self.remote_test_request_timeout:
             raise RuntimeError("Remote request for heartbeat has not been received")
 
     async def _close(self):
@@ -268,7 +260,7 @@ class Client:
 
 
 async def run(uri, fix_version, sender_comp_id, target_comp_id, heart_bt_int):
-    """ foo """
+    """foo"""
     uri = urlparse(uri)
     print(uri)
     if uri.scheme != "tcp":
@@ -286,7 +278,7 @@ async def run(uri, fix_version, sender_comp_id, target_comp_id, heart_bt_int):
 
 
 def main():
-    """ entry point """
+    """entry point"""
 
     parser = argparse.ArgumentParser(description="roq-fix-bridge test harness")
 
