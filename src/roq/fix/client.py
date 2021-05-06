@@ -81,7 +81,7 @@ class Client:
                     done = await self._on_heartbeat(message)
                 else:
                     print("WARN: Unhandled message")
-        self._close()
+        await self._close()
         print("Close the connection")
         self.writer.close()
         await self.writer.wait_closed()
@@ -203,13 +203,6 @@ class Client:
                     await self._check_remote_heartbeat()
                 else:
                     await self._check_our_request()
-                print(
-                    f"DEBUG: "
-                    f"next_test_request={self.next_test_request}, "
-                    f"remote_heartbeat_timeout={self.remote_heartbeat_timeout}, "
-                    f"remote_heart_bt_int={self.remote_heart_bt_int}, "
-                    f"remote_test_request_timeout={self.remote_test_request_timeout}"
-                )
                 await asyncio.sleep(1)
         except RuntimeError as err:
             print(f"ERROR: {err}")
@@ -223,7 +216,7 @@ class Client:
             if timeout:
                 if self.closing:
                     print("WARN: Logout request has timed out, stream will be closed now")
-                    self._close()
+                    await self._close()
                 else:
                     raise RuntimeError("Logon request has timed out")
 
