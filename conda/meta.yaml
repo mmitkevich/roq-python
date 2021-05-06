@@ -20,6 +20,7 @@ requirements:
     - wheel
   run:
     - python
+    - simplefix
 
 about:
   home: https://roq-trading.com
