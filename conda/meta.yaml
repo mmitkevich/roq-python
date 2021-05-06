@@ -8,12 +8,18 @@ source:
 build:
   skip: True  # [win]
   number: {{ GIT_DESCRIBE_NUMBER }}
+  noarch: generic
+  script: python setup.py install --single-version-externally-managed --record record.txt
 
 requirements:
-  build:
+  host:
     - python
     - pip
     - build
+    - setuptools
+    - wheel
+  run:
+    - python
 
 about:
   home: https://roq-trading.com
