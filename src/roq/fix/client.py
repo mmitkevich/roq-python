@@ -95,31 +95,25 @@ class Client:
 
     async def send_logon(self, heart_bt_int):
         """send a logon message"""
-        await self.send(
-            {
-                simplefix.TAG_MSGTYPE: simplefix.MSGTYPE_LOGON,
-                simplefix.TAG_HEARTBTINT: heart_bt_int,
-            }
-        )
+        message = simplefix.FixMessage()
+        message.append_pair(simplefix.TAG_MSGTYPE, simplefix.MSGTYPE_LOGON)
+        message.append_pair(simplefix.TAG_HEARTBTINT, heart_bt_int)
+        await self.send(message)
 
     async def send_logout(self, text):
         """send a logout message"""
-        await self.send(
-            {
-                simplefix.TAG_MSGTYPE: simplefix.MSGTYPE_LOGOUT,
-                simplefix.TAG_TEXT: text,
-            }
-        )
+        message = simplefix.FixMessage()
+        message.append_pair(simplefix.TAG_MSGTYPE, simplefix.MSGTYPE_LOGOUT)
+        message.append_pair(simplefix.TAG_TEXT, text)
+        await self.send(message)
 
     async def send_test_request(self, test_req_id):
         """send a logout message"""
         now = datetime.now()
-        await self.send(
-            {
-                simplefix.TAG_MSGTYPE: simplefix.MSGTYPE_TEST_REQUEST,
-                simplefix.TAG_TESTREQID: test_req_id,
-            }
-        )
+        message = simplefix.FixMessage()
+        message.append_pair(simplefix.TAG_MSGTYPE, simplefix.MSGTYPE_TEST_REQUEST)
+        message.append_pair(simplefix.TAG_TESTREQID, test_req_id)
+        await self.send(message)
         self.next_test_request = now + timedelta(seconds=self.heart_bt_int)
         if self.remote_heartbeat_timeout is not None:
             logging.warning("Missed a heartbeat")
@@ -127,30 +121,20 @@ class Client:
 
     async def send_heartbeat(self, test_req_id):
         """send a logout message"""
-        await self.send(
-            {
-                simplefix.TAG_MSGTYPE: simplefix.MSGTYPE_HEARTBEAT,
-                simplefix.TAG_TESTREQID: test_req_id,
-            }
-        )
-
-    async def send(self, params):
-        """helper method to encode a message and write to stream"""
         message = simplefix.FixMessage()
+        message.append_pair(simplefix.TAG_MSGTYPE, simplefix.MSGTYPE_HEARTBEAT)
+        message.append_pair(simplefix.TAG_TESTREQID, test_req_id)
+        await self.send(message)
+
+    async def send(self, message):
+        """helper method to encode a message and write to stream"""
         # standard header
-        message.append_pair(simplefix.TAG_BEGINSTRING, f"FIX.{self.fix_version}")
-        message.append_pair(simplefix.TAG_SENDER_COMPID, self.sender_comp_id)
-        message.append_pair(simplefix.TAG_TARGET_COMPID, self.target_comp_id)
-        message.append_pair(simplefix.TAG_MSGSEQNUM, self.next_send_seq_num)
+        message.append_pair(simplefix.TAG_BEGINSTRING, f"FIX.{self.fix_version}", header=True)
+        message.append_pair(simplefix.TAG_SENDER_COMPID, self.sender_comp_id, header=True)
+        message.append_pair(simplefix.TAG_TARGET_COMPID, self.target_comp_id, header=True)
+        message.append_pair(simplefix.TAG_MSGSEQNUM, self.next_send_seq_num, header=True)
         if not message.get(simplefix.TAG_SENDING_TIME):
-            message.append_utc_timestamp(simplefix.TAG_SENDING_TIME)
-        # body
-        for key, value in params.items():
-            if isinstance(value, datetime):
-                header = key == simplefix.TAG_SENDING_TIME
-                message.append_utc_timestamp(key, value, header=header)
-            else:
-                message.append_pair(key, value)
+            message.append_utc_timestamp(simplefix.TAG_SENDING_TIME, header=True)
         self.next_send_seq_num += 1
         # encode
         buffer = message.encode()

@@ -32,17 +32,19 @@ class BasicTest:
     async def on_logon(self):
         """logon event handler"""
         logging.info("LOGON")
-        # await self.client.send(
-        #     {
-        #         simplefix.TAG_MSGTYPE: simplefix.MSGTYPE_MARKET_DATA_REQUEST,
-        #         267: 2,  # NO_MD_ENTRY_TYPES
-        #         269: 0,  # MD_ENTRY_TYPE = BID
-        #         269: 1,  # MD_ENTRY_TYPE = OFFER
-        #         146: 1,  # NO_RELATED_SYM
-        #         simplefix.TAG_SYMBOL: "BTC-PERPETUAL-INDEX",
-        #         207: "deribit",  # SECURITY_EXCHANGE
-        #     }
-        #)
+        message = simplefix.FixMessage()
+        message.append_pair(simplefix.TAG_MSGTYPE, simplefix.MSGTYPE_MARKET_DATA_REQUEST)
+        message.append_pair(262, "REQ_ID")  # MD_REQ_ID
+        message.append_pair(263, 1)  # SUBSCRIPTION_REQUEST_TYPE = SNAPSHOT + UPDATE
+        message.append_pair(264, 0)  # MARKET_DEPTH = ToB
+        message.append_pair(265, 1)  # MD_UPDATE_TYPE = INCREMENTAL
+        message.append_pair(267, 2)  # NO_MD_ENTRY_TYPES
+        message.append_pair(269, 0)  # MD_ENTRY_TYPE = BID
+        message.append_pair(269, 1)  # MD_ENTRY_TYPE = OFFER
+        message.append_pair(146, 1)  # NO_RELATED_SYM
+        message.append_pair(simplefix.TAG_SYMBOL, "BTC-PERPETUAL")
+        message.append_pair(207, "deribit")  # SECURITY_EXCHANGE
+        await self.client.send(message)
 
     async def on_logout(self):
         """logout event handler"""
@@ -50,7 +52,58 @@ class BasicTest:
 
     async def on_message(self, message):
         """generic message event handler"""
-        logging.info("MESSAGE: %s", message)
+        message_type = message.message_type.decode("utf-8")
+        if message_type == "y":  # SECURITY_LIST
+            await self._on_security_list(message)
+        elif message_type == "d":  # SECURITY_DEFINITION
+            await self._on_security_definition(message)
+        elif message_type == "f":  # SECURITY_STATUS
+            await self._on_security_status(message)
+        elif message_type == "W":  # MARKET_DATA_SNAPSHOT_FULL_REFRESH
+            await self._on_market_data_snapshot_full_refresh(message)
+        elif message_type == "X":  # MARKET_DATA_INCREMENTAL_REFRESH
+            await self._on_market_data_incremental_refresh(message)
+        elif message_type == "Y":  # MARKET_DATA_REQUEST_REJECT
+            await self._on_market_data_request_reject(message)
+        else:
+            logging.error("Unknown message_type='%s'", message_type)
+
+    async def _on_security_list(self, message):
+        logging.info("SECURITY_LIST: %s", message)
+
+    async def _on_security_definition(self, message):
+        logging.info("SECURITY_DEFINITION: %s", message)
+
+    async def _on_security_status(self, message):
+        logging.info("SECURITY_STATUS: %s", message)
+
+    async def _on_market_data_snapshot_full_refresh(self, message):
+        logging.info("MARKET_DATA_SNAPSHOT_FULL_REFRESH: %s", message)
+
+    async def _on_market_data_incremental_refresh(self, message):
+        logging.info("MARKET_DATA_INCREMENTAL_REFRESH: %s", message)
+
+    async def _on_market_data_request_reject(self, message):
+        logging.error("MARKET_DATA_REQUEST_REJECT: %s", message)
+        pairs = self._decode_pairs(message)
+        md_req_rej_reason = int(self._get_value_from_tag(pairs, 281))
+        if md_req_rej_reason == 0:  # just an example -- a common enum value
+            logging.error("Reason: unknown symbol")
+        else:
+            logging.error("Reason: <unknown>")
+
+    @staticmethod
+    def _decode_pairs(message):
+        return [(int(k.decode("utf-8")), v.decode("utf-8")) for (k, v) in message.pairs]
+
+    @staticmethod
+    def _get_value_from_tag(pairs, tag):
+        res = [v for (k, v) in pairs if k == 281]
+        if len(res) < 1:
+            raise RuntimeError(f"No tag={tag}")
+        if len(res) > 1:
+            raise RuntimeError(f"Multiple tag={tag}")
+        return res[0]
 
 
 async def run(uri, fix_version, sender_comp_id, target_comp_id, heart_bt_int):
