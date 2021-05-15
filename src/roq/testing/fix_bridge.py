@@ -20,6 +20,7 @@ class BasicTest:
     def __init__(self, client):
         """constructor"""
         self.client = client
+        self.request_id = 0
         # don't know a better way to do this
         self.client.on_logon = self.on_logon
         self.client.on_logout = self.on_logout
@@ -31,20 +32,12 @@ class BasicTest:
 
     async def on_logon(self):
         """logon event handler"""
-        logging.info("LOGON")
-        message = simplefix.FixMessage()
-        message.append_pair(simplefix.TAG_MSGTYPE, simplefix.MSGTYPE_MARKET_DATA_REQUEST)
-        message.append_pair(262, "REQ_ID")  # MD_REQ_ID
-        message.append_pair(263, 1)  # SUBSCRIPTION_REQUEST_TYPE = SNAPSHOT + UPDATE
-        message.append_pair(264, 0)  # MARKET_DEPTH = ToB
-        message.append_pair(265, 1)  # MD_UPDATE_TYPE = INCREMENTAL
-        message.append_pair(267, 2)  # NO_MD_ENTRY_TYPES
-        message.append_pair(269, 0)  # MD_ENTRY_TYPE = BID
-        message.append_pair(269, 1)  # MD_ENTRY_TYPE = OFFER
-        message.append_pair(146, 1)  # NO_RELATED_SYM
-        message.append_pair(simplefix.TAG_SYMBOL, "BTC-PERPETUAL")
-        message.append_pair(207, "deribit")  # SECURITY_EXCHANGE
-        await self.client.send(message)
+        logging.info("Ready!")
+        exchange = "deribit"
+        symbol = "BTC-PERPETUAL"
+        await self._subscribe_security_definition(exchange, symbol)
+        await self._subscribe_security_status(exchange, symbol)
+        await self._subscribe_top_of_book(exchange, symbol)
 
     async def on_logout(self):
         """logout event handler"""
@@ -76,6 +69,14 @@ class BasicTest:
 
     async def _on_security_status(self, message):
         logging.info("SECURITY_STATUS: %s", message)
+        pairs = self._decode_pairs(message)
+        security_trading_status = int(self._get_value_from_tag(pairs, 326))
+        if security_trading_status == 3:
+            logging.info("Status: RESUME")
+        elif security_trading_status == 2:
+            logging.info("Status: TRADING_HALT")
+        else:
+            logging.error("Status: <unknown>")
 
     async def _on_market_data_snapshot_full_refresh(self, message):
         logging.info("MARKET_DATA_SNAPSHOT_FULL_REFRESH: %s", message)
@@ -92,13 +93,51 @@ class BasicTest:
         else:
             logging.error("Reason: <unknown>")
 
+    async def _subscribe_security_definition(self, exchange, symbol):
+        message = simplefix.FixMessage()
+        self.request_id = self.request_id + 1
+        message.append_pair(simplefix.TAG_MSGTYPE, simplefix.MSGTYPE_SECURITY_DEFINITION_REQUEST)
+        message.append_pair(320, f"REQ:{self.request_id}")  # SECURITY_STATUS_REQ_ID
+        message.append_pair(
+            321, 1
+        )  # SECURITY_REQUEST_TYPE 1 = REQUEST_SECURITY_IDENTITY_FOR_THE_SPECIFICATION_PROVIDED
+        message.append_pair(simplefix.TAG_SYMBOL, symbol)  # SYMBOL
+        message.append_pair(207, exchange)  # SECURITY_EXCHANGE
+        message.append_pair(263, 1)  # SUBSCRIPTION_REQUEST_TYPE = SNAPSHOT + UPDATE
+        await self.client.send(message)
+
+    async def _subscribe_security_status(self, exchange, symbol):
+        message = simplefix.FixMessage()
+        self.request_id = self.request_id + 1
+        message.append_pair(simplefix.TAG_MSGTYPE, simplefix.MSGTYPE_SECURITY_STATUS_REQUEST)
+        message.append_pair(324, f"REQ:{self.request_id}")  # SECURITY_STATUS_REQ_ID
+        message.append_pair(simplefix.TAG_SYMBOL, symbol)  # SYMBOL
+        message.append_pair(207, exchange)  # SECURITY_EXCHANGE
+        await self.client.send(message)
+
+    async def _subscribe_top_of_book(self, exchange, symbol):
+        message = simplefix.FixMessage()
+        self.request_id = self.request_id + 1
+        message.append_pair(simplefix.TAG_MSGTYPE, simplefix.MSGTYPE_MARKET_DATA_REQUEST)
+        message.append_pair(262, f"REQ:{self.request_id}")  # MD_REQ_ID
+        message.append_pair(263, 1)  # SUBSCRIPTION_REQUEST_TYPE = SNAPSHOT + UPDATE
+        message.append_pair(264, 0)  # MARKET_DEPTH 0 = ToB
+        message.append_pair(265, 1)  # MD_UPDATE_TYPE 1 = INCREMENTAL
+        message.append_pair(267, 2)  # NO_MD_ENTRY_TYPES
+        message.append_pair(269, 0)  # MD_ENTRY_TYPE 0 = BID
+        message.append_pair(269, 1)  # MD_ENTRY_TYPE 1 = OFFER
+        message.append_pair(146, 1)  # NO_RELATED_SYM
+        message.append_pair(simplefix.TAG_SYMBOL, symbol)  # SYMBOL
+        message.append_pair(207, exchange)  # SECURITY_EXCHANGE
+        await self.client.send(message)
+
     @staticmethod
     def _decode_pairs(message):
         return [(int(k.decode("utf-8")), v.decode("utf-8")) for (k, v) in message.pairs]
 
     @staticmethod
     def _get_value_from_tag(pairs, tag):
-        res = [v for (k, v) in pairs if k == 281]
+        res = [v for (k, v) in pairs if k == tag]
         if len(res) < 1:
             raise RuntimeError(f"No tag={tag}")
         if len(res) > 1:
