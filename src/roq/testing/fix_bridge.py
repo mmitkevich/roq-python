@@ -58,6 +58,12 @@ class BasicTest:
             await self._on_market_data_incremental_refresh(message)
         elif message_type == "Y":  # MARKET_DATA_REQUEST_REJECT
             await self._on_market_data_request_reject(message)
+        elif message_type == "8":  # EXECUTION_REPORT
+            await self._on_execution_report(message)
+        elif message_type == "9":  # ORDER_CANCEL_REJECT
+            await self._on_order_cancel_reject(message)
+        elif message_type == "r":  # ORDER_MASS_CANCEL_REPORT
+            await self._on_order_mass_cancel_report(message)
         else:
             logging.error("Unknown message_type='%s'", message_type)
 
@@ -92,6 +98,15 @@ class BasicTest:
             logging.error("Reason: unknown symbol")
         else:
             logging.error("Reason: <unknown>")
+
+    async def _on_execution_report(self, message):
+        logging.error("EXECUTION_REPORT: %s", message)
+
+    async def _on_order_cancel_reject(self, message):
+        logging.error("ORDER_CANCEL_REJECT: %s", message)
+
+    async def _on_order_mass_cancel_report(self, message):
+        logging.error("ORDER_MASS_CANCEL_REPORT: %s", message)
 
     async def _subscribe_security_definition(self, exchange, symbol):
         message = simplefix.FixMessage()
@@ -130,6 +145,36 @@ class BasicTest:
         message.append_pair(simplefix.TAG_SYMBOL, symbol)  # SYMBOL
         message.append_pair(207, exchange)  # SECURITY_EXCHANGE
         await self.client.send(message)
+
+    async def _order_status_request(self):
+        message = simplefix.FixMessage()
+        message.append_pair(simplefix.TAG_MSGTYPE, simplefix.MSGTYPE_ORDER_STATUS_REQUEST)
+        raise RuntimeError("NOT IMPLEMENTED")
+
+    async def _order_mass_status_request(self):
+        message = simplefix.FixMessage()
+        message.append_pair(simplefix.TAG_MSGTYPE, simplefix.MSGTYPE_ORDER_MASS_STATUS_REQUEST)
+        raise RuntimeError("NOT IMPLEMENTED")
+
+    async def _new_order_single(self):
+        message = simplefix.FixMessage()
+        message.append_pair(simplefix.TAG_MSGTYPE, simplefix.MSGTYPE_NEW_ORDER_SINGLE)
+        raise RuntimeError("NOT IMPLEMENTED")
+
+    async def _order_cancel_request(self):
+        message = simplefix.FixMessage()
+        message.append_pair(simplefix.TAG_MSGTYPE, simplefix.MSGTYPE_ORDER_CANCEL_REQUEST)
+        raise RuntimeError("NOT IMPLEMENTED")
+
+    async def _order_cancel_replace_request(self):
+        message = simplefix.FixMessage()
+        message.append_pair(simplefix.TAG_MSGTYPE, simplefix.MSGTYPE_ORDER_CANCEL_REPLACE_REQUEST)
+        raise RuntimeError("NOT IMPLEMENTED")
+
+    async def _order_mass_cancel_request(self):
+        message = simplefix.FixMessage()
+        message.append_pair(simplefix.TAG_MSGTYPE, simplefix.MSGTYPE_ORDER_MASS_CANCEL_REQUEST)
+        raise RuntimeError("NOT IMPLEMENTED")
 
     @staticmethod
     def _decode_pairs(message):
