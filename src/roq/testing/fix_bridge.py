@@ -5,10 +5,52 @@
 
 import argparse
 import asyncio
+import logging
 
 from urllib.parse import urlparse
 
+import simplefix
+
 from roq.fix import Client
+
+
+class BasicTest:
+    """Some test"""
+
+    def __init__(self, client):
+        """constructor"""
+        self.client = client
+        # don't know a better way to do this
+        self.client.on_logon = self.on_logon
+        self.client.on_logout = self.on_logout
+        self.client.on_message = self.on_message
+
+    async def dispatch(self):
+        """dispatch"""
+        await self.client.dispatch()
+
+    async def on_logon(self):
+        """logon event handler"""
+        logging.info("LOGON")
+        # await self.client.send(
+        #     {
+        #         simplefix.TAG_MSGTYPE: simplefix.MSGTYPE_MARKET_DATA_REQUEST,
+        #         267: 2,  # NO_MD_ENTRY_TYPES
+        #         269: 0,  # MD_ENTRY_TYPE = BID
+        #         269: 1,  # MD_ENTRY_TYPE = OFFER
+        #         146: 1,  # NO_RELATED_SYM
+        #         simplefix.TAG_SYMBOL: "BTC-PERPETUAL-INDEX",
+        #         207: "deribit",  # SECURITY_EXCHANGE
+        #     }
+        #)
+
+    async def on_logout(self):
+        """logout event handler"""
+        logging.info("LOGOUT")
+
+    async def on_message(self, message):
+        """generic message event handler"""
+        logging.info("MESSAGE: %s", message)
 
 
 async def run(uri, fix_version, sender_comp_id, target_comp_id, heart_bt_int):
@@ -26,7 +68,7 @@ async def run(uri, fix_version, sender_comp_id, target_comp_id, heart_bt_int):
         target_comp_id,
         heart_bt_int,
     )
-    await client.dispatch()
+    await BasicTest(client).dispatch()
 
 
 def main():
@@ -34,6 +76,12 @@ def main():
 
     parser = argparse.ArgumentParser(description="roq-fix-bridge test harness")
 
+    parser.add_argument(
+        "--loglevel",
+        type=str,
+        default="warning",
+        help="Log level",
+    )
     parser.add_argument(
         "--uri",
         type=str,
@@ -66,6 +114,8 @@ def main():
     )
 
     args = parser.parse_args()
+
+    logging.basicConfig(level=args.loglevel.upper())
 
     asyncio.run(
         run(

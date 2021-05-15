@@ -2,6 +2,7 @@
 """
 
 import asyncio
+import logging
 
 from datetime import datetime, timedelta
 
@@ -50,9 +51,15 @@ class Client:
 
     async def on_logon(self):
         """logon event handler"""
+        logging.info("BASE LOGON")
 
     async def on_logout(self):
         """logout event handler"""
+        logging.info("BASE LOGOUT")
+
+    async def on_message(self, message):
+        """generic message event handler"""
+        logging.warning("Unhandled message: %s", message)
 
     async def dispatch(self):
         """read from stream and dispatch messages"""
@@ -63,14 +70,14 @@ class Client:
         while not done:
             data = await self.reader.read(_READ_BUFFER_SIZE)
             if len(data) == 0:
-                print("WARN: EOF")
+                logging.warning("EOF")
                 break
             parser.append_buffer(data)
             while not done:
                 message = parser.get_message()
                 if message is None:
                     break
-                print(f"Message: {message}")
+                logging.debug("Message: %s", message)
                 if message.message_type == simplefix.MSGTYPE_LOGON:
                     done = await self._on_logon(message)
                 elif message.message_type == simplefix.MSGTYPE_LOGOUT:
@@ -80,15 +87,15 @@ class Client:
                 elif message.message_type == simplefix.MSGTYPE_HEARTBEAT:
                     done = await self._on_heartbeat(message)
                 else:
-                    print("WARN: Unhandled message")
+                    done = await self.on_message(message)
         await self._close()
-        print("Close the connection")
+        logging.info("Close the connection")
         self.writer.close()
         await self.writer.wait_closed()
 
     async def send_logon(self, heart_bt_int):
         """send a logon message"""
-        await self._send(
+        await self.send(
             {
                 simplefix.TAG_MSGTYPE: simplefix.MSGTYPE_LOGON,
                 simplefix.TAG_HEARTBTINT: heart_bt_int,
@@ -97,7 +104,7 @@ class Client:
 
     async def send_logout(self, text):
         """send a logout message"""
-        await self._send(
+        await self.send(
             {
                 simplefix.TAG_MSGTYPE: simplefix.MSGTYPE_LOGOUT,
                 simplefix.TAG_TEXT: text,
@@ -107,7 +114,7 @@ class Client:
     async def send_test_request(self, test_req_id):
         """send a logout message"""
         now = datetime.now()
-        await self._send(
+        await self.send(
             {
                 simplefix.TAG_MSGTYPE: simplefix.MSGTYPE_TEST_REQUEST,
                 simplefix.TAG_TESTREQID: test_req_id,
@@ -115,19 +122,19 @@ class Client:
         )
         self.next_test_request = now + timedelta(seconds=self.heart_bt_int)
         if self.remote_heartbeat_timeout is not None:
-            print("WARN: Missed a heartbeat")
+            logging.warning("Missed a heartbeat")
         self.remote_heartbeat_timeout = now + timedelta(seconds=10)
 
     async def send_heartbeat(self, test_req_id):
         """send a logout message"""
-        await self._send(
+        await self.send(
             {
                 simplefix.TAG_MSGTYPE: simplefix.MSGTYPE_HEARTBEAT,
                 simplefix.TAG_TESTREQID: test_req_id,
             }
         )
 
-    async def _send(self, params):
+    async def send(self, params):
         """helper method to encode a message and write to stream"""
         message = simplefix.FixMessage()
         # standard header
@@ -148,7 +155,7 @@ class Client:
         # encode
         buffer = message.encode()
         # send
-        print(f"Sending: {buffer}")
+        logging.debug("Sending: %s", buffer)
         self.writer.write(buffer)
         await self.writer.drain()
 
@@ -163,7 +170,8 @@ class Client:
         self.request_sent = None
         await self.on_logon()
         now = datetime.now()
-        await self.send_test_request(f"{now}")
+        msecs = int(now.timestamp() * 1000)
+        await self.send_test_request(f"{msecs}")
         return False
 
     async def _on_logout(self, message):
@@ -192,6 +200,10 @@ class Client:
             self.remote_test_request_timeout = now + timeout
 
     async def _on_heartbeat(self, message):
+        now = datetime.now()
+        send_time = datetime.fromtimestamp(int(message.get(simplefix.TAG_TESTREQID)) / 1000.0)
+        latency = (now - send_time).microseconds / 1000.0
+        logging.info("latency = %f (msecs)", latency)
         self.remote_heartbeat_timeout = None
         return False
 
@@ -205,7 +217,7 @@ class Client:
                     await self._check_our_request()
                 await asyncio.sleep(1)
         except RuntimeError as err:
-            print(f"ERROR: {err}")
+            logging.error("%s", err)
             loop = asyncio.get_event_loop()
             loop.stop()
 
@@ -215,7 +227,7 @@ class Client:
             timeout = (now - self.request_sent) > timedelta(seconds=10)
             if timeout:
                 if self.closing:
-                    print("WARN: Logout request has timed out, stream will be closed now")
+                    logging.warning("Logout request has timed out, stream will be closed now")
                     await self._close()
                 else:
                     raise RuntimeError("Logon request has timed out")
@@ -227,7 +239,8 @@ class Client:
             raise RuntimeError("Heartbeat has not been received")
         # our request for heartbeat
         if self.next_test_request is not None and now > self.next_test_request:
-            await self.send_test_request(f"{now}")
+            msecs = int(now.timestamp() * 1000)
+            await self.send_test_request(f"{msecs}")
 
     async def _check_remote_heartbeat(self):
         now = datetime.now()
@@ -236,6 +249,6 @@ class Client:
             raise RuntimeError("Remote request for heartbeat has not been received")
 
     async def _close(self):
-        print("Closing the stream")
+        logging.info("Closing the stream")
         self.writer.close()
         await self.writer.wait_closed()
